@@ -1,0 +1,313 @@
+<title>노출 트리거 케이스 카탈로그 · KMA-8273</title>
+<style>
+  :root{
+    --ground:#17131E; --panel:#211B2C; --console:#120F19;
+    --text:#ECE8F2; --muted:#8A8398; --border:#322A40;
+    --accent:#C89CFF; --accent-deep:#6B1F9E;
+    --send:#4ADE9E; --hold:#F5B942; --nogate:#E0567A;
+    --screen:#FAF8FC; --ink:#2A2333;
+    --v:#ECE4FB; --h:#E2F6EC; --p:#FCEDE0; --inner:#DDEBFF;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--ground);color:var(--text);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;padding:28px 18px 52px;max-width:1120px;margin:0 auto}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 8px}
+  h1{font-size:clamp(24px,4vw,36px);font-weight:800;letter-spacing:-.02em;margin:0 0 6px;line-height:1.1}
+  .lede{color:var(--muted);margin:0 0 22px;max-width:64ch;font-size:14px}
+
+  .groups{display:flex;gap:20px;flex-wrap:wrap;margin:0 0 6px}
+  .group{display:flex;flex-direction:column;gap:8px}
+  .group h3{font:600 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 2px}
+  .tabrow{display:flex;gap:6px;flex-wrap:wrap}
+  .tab{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--panel);border:1px solid var(--border);
+    border-radius:999px;padding:7px 13px;cursor:pointer;transition:all .15s}
+  .tab:hover{border-color:var(--accent)}
+  .tab[aria-selected="true"]{background:var(--accent-deep);border-color:var(--accent-deep);color:#fff;font-weight:600}
+  .tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  .stage{display:grid;grid-template-columns:286px 1fr;gap:18px;align-items:stretch;margin-top:18px}
+  @media (max-width:720px){.stage{grid-template-columns:1fr}}
+
+  .phone{background:#0C0A11;border:1px solid var(--border);border-radius:32px;padding:11px;justify-self:center;width:286px;
+    box-shadow:0 18px 46px rgba(0,0,0,.45)}
+  .screen{position:relative;height:486px;border-radius:22px;overflow:hidden;background:var(--screen);display:flex;flex-direction:column}
+  .statusbar{height:32px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:0 15px;font:600 11px var(--mono);color:#8b8496}
+  .viewport{position:relative;flex:1 1 auto;overflow:hidden}
+  .chip{position:absolute;left:11px;bottom:11px;z-index:5;font:600 12px var(--mono);padding:6px 11px;border-radius:999px;
+    background:rgba(12,10,17,.85);color:#fff;display:flex;align-items:center;gap:7px;backdrop-filter:blur(4px)}
+  .chip .led{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+  .chip[data-s="idle"] .led{background:var(--send)}
+  .chip[data-s="hold"] .led{background:var(--hold);animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.3}}
+
+  .vstrip{position:absolute;inset:0 0 auto 0;padding:8px 10px;display:flex;flex-direction:column;gap:8px;
+    transition:transform var(--dur,600ms) cubic-bezier(.22,.61,.36,1)}
+  .hstrip{position:absolute;top:0;bottom:0;left:0;padding:10px;display:flex;flex-direction:row;gap:8px;align-items:center;
+    transition:transform var(--dur,600ms) cubic-bezier(.22,.61,.36,1)}
+  .pager{position:absolute;inset:0;display:flex;transition:transform var(--dur,600ms) cubic-bezier(.22,.61,.36,1)}
+  .page{flex:0 0 100%;padding:8px 10px;display:flex;flex-direction:column;gap:8px;
+    transition:transform var(--dur,600ms) cubic-bezier(.22,.61,.36,1)}
+
+  .card{flex:0 0 auto;border-radius:13px;background:var(--tint,var(--v));color:var(--ink);display:flex;align-items:center;
+    justify-content:center;gap:8px;font:600 14px var(--sans);position:relative}
+  .card.v{height:80px}
+  .card.h{width:118px;height:150px}
+  .card.mini{width:92px;height:96px;font-size:12px;background:var(--inner)}
+  .card .dot{position:absolute;top:8px;right:8px;width:19px;height:19px;border-radius:50%;border:2px solid rgba(42,35,51,.25);
+    display:grid;place-items:center;font-size:11px;transition:all .2s}
+  .card.fired .dot{background:var(--send);border-color:var(--send);color:#08301f}
+  .card.fired{box-shadow:0 0 0 2px var(--send) inset}
+  .card.justfired{animation:pop .35s ease}
+  @keyframes pop{40%{transform:scale(1.03)}}
+
+  .nestcard{flex:0 0 auto;border-radius:13px;background:#fff;border:1px dashed #b9a9e0;padding:8px;overflow:hidden;position:relative}
+  .nestcard .tag{position:absolute;top:6px;left:10px;font:600 10px var(--mono);color:#8a5cc4;z-index:2}
+  .innerwrap{position:relative;height:120px;overflow:hidden;margin-top:14px}
+  .innerstrip{position:absolute;top:0;left:0;bottom:0;display:flex;gap:8px;align-items:center;
+    transition:transform var(--dur,600ms) cubic-bezier(.22,.61,.36,1)}
+  .innerpager{position:absolute;inset:14px 0 0 0;overflow:hidden}
+  .innerpagertrack{position:absolute;inset:0;display:flex;transition:transform var(--dur,600ms) cubic-bezier(.22,.61,.36,1)}
+  .innerpage{flex:0 0 100%;display:flex;gap:8px;padding:0 2px;align-items:center}
+
+  .console{background:var(--console);border:1px solid var(--border);border-radius:15px;display:flex;flex-direction:column;min-height:486px;overflow:hidden}
+  .console .bar{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:11px 15px;border-bottom:1px solid var(--border);font:600 12px var(--mono);color:var(--muted)}
+  .console .bar b{color:var(--accent)}
+  .console .bar .struct{margin-left:auto;color:var(--text);font-weight:500}
+  .log{flex:1 1 auto;overflow-y:auto;padding:11px 13px;margin:0;list-style:none;font:12.5px/1.5 var(--mono)}
+  .log li{padding:4px 7px;border-radius:7px;margin:0 0 2px;display:flex;gap:8px;opacity:0;transform:translateY(6px);
+    animation:enter .26s ease forwards;color:#cfc9db}
+  @keyframes enter{to{opacity:1;transform:none}}
+  .log li.gate{color:var(--accent)} .log li.send{color:var(--send);font-weight:600}
+  .log li.state{color:var(--muted)} .log li.head{color:#fff;margin-top:6px;border-top:1px dashed var(--border);padding-top:8px}
+  .log li.head:first-child{border-top:0;margin-top:0}
+  .log .id{color:#fff}
+
+  .meta{display:flex;flex-wrap:wrap;gap:10px 18px;margin:14px 0 0;font:12px var(--mono);color:var(--muted)}
+  .meta code{color:var(--accent);background:rgba(200,156,255,.1);padding:1px 6px;border-radius:5px}
+  .controls{display:flex;gap:9px;margin:15px 0 0}
+  .btn{font:600 13px var(--sans);color:#fff;background:var(--accent-deep);border:0;border-radius:9px;padding:10px 18px;cursor:pointer;transition:filter .15s}
+  .btn:hover{filter:brightness(1.12)} .btn.ghost{background:transparent;color:var(--text);border:1px solid var(--border)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px} .btn[disabled]{opacity:.5;cursor:default}
+  .desc{margin:16px 0 0;color:var(--muted);font-size:13.5px;max-width:72ch} .desc b{color:var(--text)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin:12px 0 0;font:11.5px var(--mono);color:var(--muted)}
+  .legend span{display:flex;align-items:center;gap:6px} .sw{width:10px;height:10px;border-radius:3px;display:inline-block}
+</style>
+
+<p class="eyebrow">KMA-8273 · 노출 트리거</p>
+<h1>스크롤 케이스 카탈로그</h1>
+<p class="lede">단일/중첩 스크롤 컨테이너별로 노출이 <b>언제 발송·보류</b>되는지 비교. 재생을 누르면 스크롤에 맞춰 로그가 찍히고, 발송 순간 카드에 <b style="color:var(--send)">✅</b> 가 켜집니다. 발송 판정은 <b>실제 화면에 1px이라도 보이면</b> 노출로 간주합니다.</p>
+
+<div class="groups">
+  <div class="group"><h3>단일 스크롤</h3><div class="tabrow" id="tabs-single"></div></div>
+  <div class="group"><h3>중첩 스크롤 (같은 축 제외)</h3><div class="tabrow" id="tabs-nested"></div></div>
+</div>
+
+<div class="stage">
+  <div class="phone"><div class="screen">
+    <div class="statusbar"><span>컬리 beta</span><span>15:48</span></div>
+    <div class="viewport" id="vp"><div class="chip" id="chip" data-s="idle"><span class="led"></span><span id="chipTxt">정지</span></div></div>
+  </div></div>
+  <div class="console">
+    <div class="bar"><span>logcat</span> · <b>jsh</b><span class="struct" id="struct"></span></div>
+    <ul class="log" id="log" aria-live="polite"></ul>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="play">▶ 재생</button>
+  <button class="btn ghost" id="reset">↻ 처음으로</button>
+</div>
+<div class="legend">
+  <span><i class="sw" style="background:var(--hold)"></i> 스크롤 중 = 보류</span>
+  <span><i class="sw" style="background:var(--send)"></i> 발송 ([뷰]=보여서 / [스크롤]=멈춰서)</span>
+  <span>1px 이상 보이면 노출</span>
+</div>
+<p class="meta" id="meta"></p>
+<p class="desc" id="desc"></p>
+
+<script>
+(function(){
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const vp=document.getElementById("vp"), chip=document.getElementById("chip"), chipTxt=document.getElementById("chipTxt");
+  const logEl=document.getElementById("log"), playBtn=document.getElementById("play"), resetBtn=document.getElementById("reset");
+  const descEl=document.getElementById("desc"), structEl=document.getElementById("struct"), metaEl=document.getElementById("meta");
+  let token=0, running=false, currentId=null;
+  const fired=new Set();
+
+  const sleep=ms=>new Promise(r=>setTimeout(r, reduce?30:ms));
+  const setChip=(s,t)=>{chip.dataset.s=s; chipTxt.textContent=t;};
+  function line(cls,ic,html){const li=document.createElement("li");li.className=cls;li.innerHTML=`<span>${ic}</span><span>${html}</span>`;
+    if(reduce){li.style.animation="none";li.style.opacity="1";li.style.transform="none";}
+    logEl.appendChild(li);logEl.scrollTop=logEl.scrollHeight;return li;}
+  const tag=id=>`<span class="id">${id}</span>`;
+  function markFired(id){const c=vp.querySelector(`[data-id="${id}"]`); if(c){c.classList.add("fired","justfired");const d=c.querySelector(".dot");if(d)d.textContent="✓";setTimeout(()=>c.classList.remove("justfired"),360);}}
+  function clearStage(){vp.querySelectorAll(".vstrip,.hstrip,.pager,.nestcard-host").forEach(n=>n.remove());logEl.innerHTML="";setChip("idle","정지");fired.clear();}
+
+  // ---- 실제 가시성 판정: 1px 이라도 뷰포트(+중첩 컨테이너)에 겹치면 보임 ----
+  function overlaps(a,b){return a.left<b.right && a.right>b.left && a.top<b.bottom && a.bottom>b.top;}
+  function visibleIds(){
+    const vpR=vp.getBoundingClientRect(); const out=[];
+    vp.querySelectorAll(".card").forEach(c=>{
+      const r=c.getBoundingClientRect();
+      if(!overlaps(r,vpR))return;
+      const clip=c.closest(".innerwrap")||c.closest(".innerpager")||c.closest(".nestcard");
+      if(clip && !overlaps(r,clip.getBoundingClientRect()))return;
+      out.push(c.dataset.id);
+    });
+    return out;
+  }
+
+  // ---- builders ----
+  function card(id,cls,tint,label){const c=document.createElement("div");c.className="card "+cls;c.dataset.id=id;
+    if(tint)c.style.setProperty("--tint",tint);c.innerHTML=`<span class="dot"></span><span>${label}</span>`;return c;}
+  function vstrip(prefix,n,tint){const s=document.createElement("div");s.className="vstrip";
+    for(let i=0;i<n;i++)s.appendChild(card(`${prefix}${i}`,"v",tint,`상품 ${i}`));vp.appendChild(s);return s;}
+  function hstrip(prefix,n,tint){const s=document.createElement("div");s.className="hstrip";
+    for(let i=0;i<n;i++)s.appendChild(card(`${prefix}${i}`,"h",tint,`${i}`));vp.appendChild(s);return s;}
+  function pager(prefix,pages,per,tint){const pg=document.createElement("div");pg.className="pager";
+    for(let p=0;p<pages;p++){const pa=document.createElement("div");pa.className="page";
+      for(let i=0;i<per;i++)pa.appendChild(card(`${prefix}p${p}-i${i}`,"v",tint,`페이지 ${p} · 상품 ${i}`));pg.appendChild(pa);}
+    vp.appendChild(pg);return pg;}
+  function nestedVH(innerKind){
+    const host=document.createElement("div");host.className="vstrip nestcard-host";
+    host.appendChild(card("o0","v","var(--v)","상품 0"));host.appendChild(card("o1","v","var(--v)","상품 1"));
+    const nest=document.createElement("div");nest.className="nestcard";nest.style.height="150px";
+    if(innerKind==='row'){
+      nest.innerHTML=`<span class="tag">└ LazyRow (가로)</span><div class="innerwrap"><div class="innerstrip" id="inner"></div></div>`;
+      host.appendChild(nest);const inner=nest.querySelector("#inner");
+      for(let i=0;i<8;i++)inner.appendChild(card(`r${i}`,"mini",null,`r${i}`));
+    }else{
+      nest.innerHTML=`<span class="tag">└ Pager (가로)</span><div class="innerpager"><div class="innerpagertrack" id="inner"></div></div>`;
+      host.appendChild(nest);const inner=nest.querySelector("#inner");
+      for(let p=0;p<3;p++){const ip=document.createElement("div");ip.className="innerpage";
+        for(let i=0;i<2;i++)ip.appendChild(card(`r-p${p}-${i}`,"mini",null,`p${p}·${i}`));inner.appendChild(ip);}
+    }
+    for(let i=2;i<7;i++)host.appendChild(card(`o${i}`,"v","var(--v)",`상품 ${i}`));
+    vp.appendChild(host);return host;
+  }
+  function setDur(el,ms){el.style.setProperty("--dur",(reduce?0:ms)+"ms");}
+  function move(el,x,y,ms){setDur(el,ms);el.style.transform=`translate(${x}px,${y}px)`;return sleep(ms);}
+
+  // ---- 발송 로직: 항상 "지금 실제로 보이는 것" 기준 ----
+  async function fireView(){ // 스크롤 없음/진입: 보이는 즉시 발송
+    for(const id of visibleIds()){ if(fired.has(id))continue; fired.add(id);
+      line("send","✅",`[뷰가 보여서] 노출 발송: ${tag(id)}`); markFired(id); await sleep(reduce?0:100); } }
+  function startHold(axis){setChip("hold","스크롤 중 · 보류");line("gate","⏸️",`${axis} 스크롤 감지 → 이후 노출 발송 보류`);}
+  async function settle(){ // 멈춤: 지금 보이는 것 중 아직 안 쏜 것만 일괄
+    setChip("idle","정지");line("gate","▶️","스크롤 멈춤 → 보류했던 노출 일괄 발송");
+    const ids=visibleIds().filter(id=>!fired.has(id));
+    if(!ids.length){line("state","·","(새로 보이는 노출 없음)");return;}
+    for(const id of ids){fired.add(id);line("send","✅",`[스크롤 멈춰서] 노출 발송: ${tag(id)}`);markFired(id);await sleep(reduce?0:90);}
+  }
+
+  // ---- cases ----
+  const CASES=[
+    { group:"single", id:"lazycol", label:"LazyColumn", struct:"LazyColumn (세로)",
+      meta:["<code>scrollImpression(controller, listState)</code>","<code>viewImpression</code> on items"],
+      desc:"세로 Lazy 리스트. 진입 시 <b>1px이라도 보이는</b> 항목 즉시 발송, 스크롤 중엔 보류, 멈추면 그때 보이는 것만 일괄. 스쳐 지나간 항목은 미발송.",
+      build(){vstrip("i",14,"var(--v)");},
+      async run(t){const s=vp.querySelector(".vstrip");
+        line("head","📱","진입 (스크롤 없음)"); await fireView(); await sleep(600); if(t!==token)return;
+        line("head","👇","세로 플링"); startHold("↕️ 세로"); await move(s,0,-84*7,1000); if(t!==token)return; await settle(); } },
+
+    { group:"single", id:"lazyrow", label:"LazyRow", struct:"LazyRow (가로)",
+      meta:["<code>scrollImpression(controller, listState)</code>","viewImpression on items"],
+      desc:"가로 Lazy 리스트. 세로와 동일 게이팅 — 진입 발송, 스크롤 중 보류, 멈춤 시 일괄. 축만 다르다.",
+      build(){hstrip("i",14,"var(--h)");},
+      async run(t){const s=vp.querySelector(".hstrip");
+        line("head","📱","진입"); await fireView(); await sleep(600); if(t!==token)return;
+        line("head","👉","가로 플링"); startHold("↔️ 가로"); await move(s,-126*6,0,1000); if(t!==token)return; await settle(); } },
+
+    { group:"single", id:"pager", label:"Pager", struct:"HorizontalPager",
+      meta:["<code>scrollImpression(controller, pagerState)</code>","viewImpression on items"],
+      desc:"페이저. 스와이프 중 삐져나온 다음 페이지는 보류, 페이지 안착 뒤에만 발송.",
+      build(){pager("",3,4,"var(--p)");},
+      async run(t){const pg=vp.querySelector(".pager");
+        line("head","📱","진입 · 페이지 0"); await fireView(); await sleep(600); if(t!==token)return;
+        line("head","👉","페이지 1 로 스와이프"); startHold("↔️ 페이저"); await move(pg,-vp.clientWidth,0,900); if(t!==token)return; await settle(); } },
+
+    { group:"single", id:"column", label:"Column(scroll)", struct:"Column + verticalScroll",
+      meta:["<code>scrollImpression(controller, scrollState)</code>","viewImpression on items"],
+      desc:"verticalScroll Column. LazyColumn 과 게이팅 동작 동일(Lazy 여부는 게이팅과 무관).",
+      build(){vstrip("i",12,"var(--v)");},
+      async run(t){const s=vp.querySelector(".vstrip");
+        line("head","📱","진입"); await fireView(); await sleep(600); if(t!==token)return;
+        line("head","👇","세로 스크롤"); startHold("↕️ 세로"); await move(s,0,-84*5,1000); if(t!==token)return; await settle(); } },
+
+    { group:"single", id:"row", label:"Row(scroll)", struct:"Row + horizontalScroll",
+      meta:["<code>scrollImpression(controller, scrollState)</code>","viewImpression on items"],
+      desc:"horizontalScroll Row. LazyRow 와 동일한 게이팅.",
+      build(){hstrip("i",12,"var(--h)");},
+      async run(t){const s=vp.querySelector(".hstrip");
+        line("head","📱","진입"); await fireView(); await sleep(600); if(t!==token)return;
+        line("head","👉","가로 스크롤"); startHold("↔️ 가로"); await move(s,-126*5,0,1000); if(t!==token)return; await settle(); } },
+
+    { group:"nested", id:"col-row", label:"LazyColumn→LazyRow", struct:"LazyColumn(세로) → LazyRow(가로)",
+      meta:["outer: <code>scrollImpression</code>","inner: <code>addImpressionScroll</code>","상품상세 대표 구조"],
+      desc:"세로 목록 안에 가로 줄. 외부 세로 스크롤·내부 가로 제스처는 최외곽 게이트가 잡고, 내부 가로 '프로그램적' 스크롤은 addImpressionScroll 로 합류시켜 보류.",
+      build(){nestedVH('row');},
+      async run(t){
+        line("head","📱","진입"); await fireView(); await sleep(600); if(t!==token)return;
+        const outer=vp.querySelector(".vstrip"), inner=vp.querySelector("#inner");
+        line("head","👇","① 외부 세로 스크롤"); startHold("↕️ 외부"); await move(outer,0,-150,850); if(t!==token)return; await settle();
+        await sleep(500); if(t!==token)return;
+        line("head","⟳","② 내부 가로 '프로그램적' 스크롤 (animateScrollToItem)"); startHold("↔️ 내부(프로그램)");
+        await move(inner,-100*4,0,900); if(t!==token)return; await settle(); } },
+
+    { group:"nested", id:"pager-col", label:"Pager→LazyColumn", struct:"Pager(가로) → LazyColumn(세로)",
+      meta:["outer: <code>scrollImpression(pagerState)</code>","inner: <code>addImpressionScroll(listState)</code>"],
+      desc:"페이저 각 페이지가 세로 리스트. 페이지 스와이프·내부 세로 제스처는 최외곽 페이저 게이트가 잡고, 내부 세로 프로그램적 스크롤은 addImpressionScroll 로 보류.",
+      build(){pager("",3,8,"var(--p)");},
+      async run(t){const pg=vp.querySelector(".pager");
+        line("head","📱","진입 · 페이지 0"); await fireView(); await sleep(600); if(t!==token)return;
+        line("head","👉","① 페이지 스와이프"); startHold("↔️ 페이저"); await move(pg,-vp.clientWidth,0,850); if(t!==token)return; await settle();
+        await sleep(500); if(t!==token)return;
+        line("head","⟳","② 내부 세로 프로그램적 스크롤"); startHold("↕️ 내부(프로그램)");
+        await move(pg.children[1],0,-84*3,900); if(t!==token)return; await settle(); } },
+
+    { group:"nested", id:"colscroll-row", label:"Column→LazyRow", struct:"Column(세로 scroll) → LazyRow(가로)",
+      meta:["outer: <code>scrollImpression(scrollState)</code>","inner: <code>addImpressionScroll</code>"],
+      desc:"세로 스크롤 Column 안에 가로 줄. col-row 와 동일 게이팅(Lazy 여부 무관).",
+      build(){nestedVH('row');},
+      async run(t){
+        line("head","📱","진입"); await fireView(); await sleep(600); if(t!==token)return;
+        const outer=vp.querySelector(".vstrip"), inner=vp.querySelector("#inner");
+        line("head","👇","① 외부 세로 스크롤"); startHold("↕️ 외부"); await move(outer,0,-150,850); if(t!==token)return; await settle();
+        await sleep(500); if(t!==token)return;
+        line("head","👉","② 내부 가로 제스처(버블링으로 잡힘)"); startHold("↔️ 내부(제스처)");
+        await move(inner,-100*3,0,850); if(t!==token)return; await settle(); } },
+
+    { group:"nested", id:"col-pager", label:"LazyColumn→Pager", struct:"LazyColumn(세로) → Pager(가로)",
+      meta:["outer: <code>scrollImpression</code>","inner: <code>addImpressionScroll</code>(프로그램 스와이프 시)"],
+      desc:"세로 목록 안에 가로 페이저. 외부 세로 스크롤·내부 페이저 제스처 스와이프는 최외곽 게이트가 잡고, 페이저를 코드로 넘기면 addImpressionScroll 로 보류.",
+      build(){nestedVH('pager');},
+      async run(t){
+        line("head","📱","진입"); await fireView(); await sleep(600); if(t!==token)return;
+        const outer=vp.querySelector(".vstrip"), inner=vp.querySelector("#inner");
+        line("head","👇","① 외부 세로 스크롤"); startHold("↕️ 외부"); await move(outer,0,-150,850); if(t!==token)return; await settle();
+        await sleep(500); if(t!==token)return;
+        line("head","👉","② 내부 페이저 스와이프(제스처 버블링)"); startHold("↔️ 내부 페이저");
+        await move(inner,-inner.parentElement.clientWidth,0,850); if(t!==token)return; await settle(); } },
+  ];
+
+  function renderTabs(){
+    const single=document.getElementById("tabs-single"), nested=document.getElementById("tabs-nested");
+    CASES.forEach(c=>{const b=document.createElement("button");b.className="tab";b.setAttribute("role","tab");b.dataset.id=c.id;b.textContent=c.label;
+      b.addEventListener("click",()=>select(c.id));(c.group==="single"?single:nested).appendChild(b);});
+  }
+  const caseById=id=>CASES.find(c=>c.id===id);
+  function select(id){currentId=id;token++;running=false;
+    document.querySelectorAll(".tab").forEach(b=>b.setAttribute("aria-selected",b.dataset.id===id));
+    const c=caseById(id);structEl.textContent=c.struct;descEl.innerHTML=c.desc;metaEl.innerHTML=c.meta.map(m=>`<span>${m}</span>`).join("");
+    clearStage();c.build();playBtn.disabled=false;playBtn.textContent="▶ 재생";}
+  async function play(){const c=caseById(currentId);if(!c)return;token++;const t=token;running=true;playBtn.disabled=true;playBtn.textContent="▶ 재생 중…";
+    clearStage();c.build();try{await c.run(t);}catch(e){}if(t===token){running=false;playBtn.disabled=false;playBtn.textContent="▶ 다시 재생";}}
+  function reset(){token++;running=false;const c=caseById(currentId);clearStage();c.build();playBtn.disabled=false;playBtn.textContent="▶ 재생";}
+
+  playBtn.addEventListener("click",play);resetBtn.addEventListener("click",reset);
+  renderTabs();select("lazycol");
+})();
+</script>
