@@ -1,0 +1,778 @@
+<title>isScrollInProgress false 구간 조사 기록</title>
+<style>
+  :root {
+    --ground: #14161E;
+    --surface: #1B1F2C;
+    --surface-2: #232838;
+    --text: #E7E9F2;
+    --muted: #8C92A8;
+    --line: rgba(255, 255, 255, 0.09);
+    --amber: #F4B63E;   /* 신호 HIGH = 스크롤 세션 활성 */
+    --red: #FF6B6B;     /* gap = 움직이는 중인데 false */
+    --cyan: #56C2D6;    /* 보조: playhead / 라벨 */
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background:
+      radial-gradient(1200px 600px at 70% -10%, rgba(86, 194, 214, 0.06), transparent 60%),
+      var(--ground);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---------- hero ---------- */
+  .hero {
+    padding: 72px 0 28px;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin: 0 0 18px;
+  }
+  h1 {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: clamp(34px, 6vw, 60px);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+    margin: 0 0 18px;
+  }
+  h1 .lie { color: var(--red); }
+  .lede {
+    font-size: clamp(16px, 2.4vw, 19px);
+    color: var(--muted);
+    max-width: 56ch;
+    margin: 0;
+  }
+  .lede code { color: var(--text); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+  }
+
+  /* ---------- scope (canvas trace) ---------- */
+  .scope {
+    margin: 40px 0 8px;
+    background: linear-gradient(180deg, var(--surface-2), var(--surface));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px 20px 14px;
+  }
+  .scope-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .scope-title {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .scope-title b { color: var(--text); font-weight: 600; }
+  canvas { display: block; width: 100%; height: auto; }
+  .replay {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    color: var(--ground);
+    background: var(--amber);
+    border: 0;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  .replay:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+  .scope-note {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin: 6px 2px 0;
+  }
+  .scope-note .r { color: var(--red); }
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    margin: 14px 2px 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; }
+
+  /* ---------- sections ---------- */
+  section { padding: 44px 0; border-top: 1px solid var(--line); }
+  .sec-label {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin: 0 0 22px;
+  }
+  h2 {
+    font-family: var(--mono);
+    font-weight: 700;
+    font-size: clamp(22px, 3.4vw, 30px);
+    margin: 0 0 8px;
+    letter-spacing: -0.01em;
+  }
+
+  /* ---------- steps ---------- */
+  .step {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 20px;
+    padding: 22px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .step:last-child { border-bottom: 0; }
+  .step-no {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--amber);
+    padding-top: 2px;
+  }
+  .step.gap .step-no { color: var(--red); }
+  .step h3 {
+    font-family: var(--mono);
+    font-size: 16px;
+    margin: 0 0 6px;
+    font-weight: 600;
+  }
+  .step h3 .state {
+    font-size: 12px;
+    padding: 2px 9px;
+    border-radius: 999px;
+    margin-left: 8px;
+    vertical-align: middle;
+    border: 1px solid var(--line);
+  }
+  .state.t { color: var(--amber); background: rgba(244, 182, 62, 0.1); }
+  .state.f { color: var(--red); background: rgba(255, 107, 107, 0.1); }
+  .step p { margin: 0 0 12px; color: var(--muted); }
+  .step p b { color: var(--text); font-weight: 600; }
+
+  /* ---------- code ---------- */
+  pre {
+    margin: 0;
+    background: #0F121A;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--amber);
+    border-radius: 10px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.6;
+    color: #C9CEDE;
+  }
+  pre.gap { border-left-color: var(--red); }
+  .cm { color: #69708A; font-style: italic; }   /* comment */
+  .kw { color: var(--cyan); }                    /* keyword */
+  .hl { color: var(--amber); }                   /* highlight token */
+  .hlr { color: var(--red); }                    /* gap token */
+
+  /* ---------- compare ---------- */
+  .compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+  }
+  .card.bad { border-color: rgba(255, 107, 107, 0.4); }
+  .card.good { border-color: rgba(244, 182, 62, 0.4); }
+  .card h4 {
+    font-family: var(--mono);
+    font-size: 13px;
+    margin: 0 0 4px;
+  }
+  .card .who { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0 0 12px; }
+  .card .verdict {
+    font-family: var(--mono);
+    font-size: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
+  }
+  .card.bad .verdict { color: var(--red); }
+  .card.good .verdict { color: var(--amber); }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  /* ---------- callout ---------- */
+  .callout {
+    background: linear-gradient(180deg, rgba(244, 182, 62, 0.08), transparent);
+    border: 1px solid rgba(244, 182, 62, 0.3);
+    border-radius: 12px;
+    padding: 22px 24px;
+  }
+  .callout h2 { margin-bottom: 12px; }
+  .callout ul { margin: 0; padding-left: 18px; color: var(--text); }
+  .callout li { margin: 8px 0; }
+  .callout li b { color: var(--amber); }
+  .doc-note {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 16px;
+    font-family: var(--mono);
+  }
+
+  footer {
+    padding: 36px 0 64px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+    border-top: 1px solid var(--line);
+  }
+
+  /* ---------- comparison table ---------- */
+  .cmp-wrap { overflow-x: auto; margin-top: 18px; }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 460px; }
+  .cmp th, .cmp td { text-align: left; padding: 11px 12px; border-top: 1px solid var(--line); vertical-align: top; }
+  .cmp thead th { color: var(--text); font-family: var(--mono); font-weight: 600; font-size: 12px; border-top: 0; }
+  .cmp thead th:nth-child(2) { color: var(--cyan); }
+  .cmp thead th:nth-child(3) { color: var(--amber); }
+  .cmp td.k { color: var(--muted); font-family: var(--mono); white-space: nowrap; font-size: 12px; }
+  .cmp td { color: var(--text); }
+  .by { font-family: var(--mono); font-size: 11px; font-weight: 400; color: var(--muted); }
+
+  /* ---------- frame-by-frame diagram ---------- */
+  .fdiag { display: flex; flex-direction: column; gap: 18px; margin: 8px 0 4px; }
+  .fcase {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 16px 16px;
+  }
+  .fcase.good { border-color: rgba(244, 182, 62, 0.3); }
+  .fcase.bad { border-color: rgba(255, 107, 107, 0.38); }
+  .fcase h4 { font-family: var(--mono); font-size: 13px; margin: 0 0 4px; }
+  .fcase .sub { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 0 0 14px; }
+  .lane-label { font-family: var(--mono); font-size: 11px; color: var(--muted); margin: 12px 0 5px; }
+  .lane { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  .cell {
+    height: 30px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 11px; white-space: nowrap; overflow: hidden;
+  }
+  .work { background: rgba(86, 194, 214, 0.16); border: 1px solid rgba(86, 194, 214, 0.4); color: var(--cyan); }
+  .work.heavy { background: rgba(255, 107, 107, 0.15); border: 1px solid rgba(255, 107, 107, 0.45); color: var(--red); }
+  .work.fling { background: rgba(244, 182, 62, 0.16); border: 1px solid rgba(244, 182, 62, 0.45); color: var(--amber); }
+  .st { font-weight: 700; }
+  .st.t { background: rgba(244, 182, 62, 0.14); color: var(--amber); border: 1px solid rgba(244, 182, 62, 0.3); }
+  .st.f { background: rgba(255, 107, 107, 0.18); color: var(--red); border: 1px solid rgba(255, 107, 107, 0.5); }
+  .faxis { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-top: 6px; }
+  .faxis span { font-family: var(--mono); font-size: 10px; color: var(--muted); text-align: center; }
+  .fcase .note { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 13px; line-height: 1.5; }
+  .fcase.bad .note b { color: var(--red); }
+  .fcase.good .note b { color: var(--amber); }
+
+  @media (max-width: 680px) {
+    .compare { grid-template-columns: 1fr; }
+    .step { grid-template-columns: 40px 1fr; gap: 14px; }
+    .cell { font-size: 9px; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">조사 기록 · 2026-06-30 · Jetpack Compose</p>
+    <h1>isScrollInProgress 가 드래그·플링 사이에 잠깐 false 가 되는 구간</h1>
+    <p class="lede">한 번 세게 스크롤하면 <code>isScrollInProgress</code> 는 <code>true → false → true → false</code> 로 기록된다. 드래그가 끝나고 플링(관성 스크롤)이 시작되기 전, 잠깐 <code>false</code> 가 되는 구간을 관찰하고 원인·영향·대응을 정리한 기록.</p>
+
+    <div class="scope">
+      <div class="scope-head">
+        <div class="scope-title"><b>isScrollInProgress</b> · 한 번 세게 스크롤할 때</div>
+        <button class="replay" id="replay" type="button">▶ 다시 재생</button>
+      </div>
+      <canvas id="trace" aria-label="isScrollInProgress 신호: 드래그 동안 true, 그 다음 잠깐 false, 플링 동안 true, 정지에서 false"></canvas>
+      <p class="scope-note">중간의 <span class="r">붉은 구간</span> = 실제 약 <span class="r">2ms</span>(한 프레임보다 짧음). 보이라고 폭을 과장했다.</p>
+      <div class="legend">
+        <span><i class="swatch" style="background:var(--amber)"></i> true · 스크롤 동작 중</span>
+        <span><i class="swatch" style="background:var(--red)"></i> false · 드래그·플링 사이</span>
+        <span><i class="swatch" style="background:var(--cyan)"></i> 시간 진행</span>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <p class="sec-label">배경 — 두 가지 노출(impression) 처리 방식</p>
+    <h2>impressionCapturable · impressionable — 내부 동작과 차이</h2>
+    <p style="color:var(--muted);max-width:64ch;margin:0 0 4px">
+      이 프로젝트에는 노출 이벤트를 처리하는 방식이 두 가지 있다. 역할 범위가 다르다.
+    </p>
+    <div class="compare">
+      <div class="card">
+        <h4>impressionCapturable <span class="by">· 기찬님</span></h4>
+        <p class="who">노출 여부만 판단 → 공유 캐시에 등록/삭제</p>
+        <p>요소가 배치될 때마다(onGloballyPositioned) 화면에 보이는지 확인한다.<br>
+        · 보이기 시작 → <b style="color:var(--text)">captureEvents</b>(캐시에 추가)<br>
+        · 사라짐 → <b style="color:var(--text)">releaseEvents</b>(캐시에서 제거)<br>
+        발송은 하지 않고 <b style="color:var(--text)">"지금 보이는 것 목록"</b>만 캐시에 유지한다. 실제 발송은 별도 <code>ImpressionEventEffects</code> 가 스크롤이 멈출 때 캐시를 읽어 처리한다.</p>
+        <p class="who">가시성 기준: 호스트 View 의 실제 보이는 영역(<code>getLocalVisibleRect</code>)</p>
+      </div>
+      <div class="card">
+        <h4>impressionable <span class="by">· 남표님</span></h4>
+        <p class="who">노출 + 스크롤 + 발송을 한 노드에서 모두 처리</p>
+        <p>요소가 배치될 때마다 보임 여부(isInViewport)를 갱신하고,<br>
+        동시에 <b style="color:var(--text)">스크롤 조건</b>(정지 또는 저속)을 관찰한다.<br>
+        <b style="color:var(--text)">둘 다 충족되면 onImpression() 을 직접 호출</b>해 이벤트를 발송한다. 스크롤 조건은 요소마다 자체적으로 가지며, 정지 판정 시 짧은 false 는 시간 지연으로 흡수한다.</p>
+        <p class="who">가시성 기준: 호출자가 넘긴 <code>viewportRect</code></p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h4>getLocalVisibleRect 가 주는 영역</h4>
+      <p><code>view.getLocalVisibleRect(r)</code> 는 <b style="color:var(--text)">이 View 가 화면에 "보이는 부분"</b> 을 <code>r</code> 에 채워준다. 좌표는 <b style="color:var(--text)">View 자신의 로컬 좌표</b>(왼쪽 위 = (0,0), 오른쪽 아래 = (너비, 높이))다.</p>
+      <p>부모 뷰·윈도우·스크롤에 의해 잘리고 <b style="color:var(--text)">남은 사각형</b>이 결과다:<br>
+      · 전부 보이면 → <code>(0, 0, 너비, 높이)</code><br>
+      · 위가 잘리면 → <code>top</code> 이 0 보다 커짐<br>
+      · 아래가 잘리면 → <code>bottom</code> 이 높이보다 작아짐<br>
+      · 완전히 화면 밖 → <code>false</code> 반환</p>
+
+      <div style="display:flex;gap:16px;align-items:stretch;margin:14px 0 4px;max-width:440px">
+        <div style="width:130px;display:flex;flex-direction:column;font-family:var(--mono);font-size:10px;text-align:center">
+          <div style="flex:0 0 42px;border:1px dashed var(--line);border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;color:var(--muted)">잘림 (화면 밖)</div>
+          <div style="flex:1;min-height:78px;background:rgba(244,182,62,0.14);border:1px solid rgba(244,182,62,0.4);border-top:0;border-radius:0 0 6px 6px;display:flex;align-items:center;justify-content:center;color:var(--amber);padding:6px;line-height:1.5">보이는 부분<br>= 결과 rect</div>
+        </div>
+        <div style="display:flex;flex-direction:column;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);padding:2px 0">
+          <div>← View 상단 · local (0, 0)</div>
+          <div>← 화면 상단 · local top = a</div>
+          <div>← View 하단 · local (너비, 높이)</div>
+        </div>
+      </div>
+
+      <p class="who" style="margin-top:12px">여기서 View 는 Compose 를 담은 호스트(<code>ComposeView</code>)다. 그 "보이는 영역"을 얻은 뒤 <code>getLocationInWindow</code> 로 window 좌표로 바꿔, 각 아이템 영역과 교집합해 노출 비율을 계산한다.</p>
+      <p class="who" style="margin-top:8px"><b style="color:var(--red)">주의 — z축 가려짐은 계산하지 않는다.</b> <code>getLocalVisibleRect</code> 는 부모·윈도우·스크롤에 의한 <b style="color:var(--text)">기하학적 잘림만</b> 본다. 위에 겹쳐 그려진 뷰(바텀시트·다이얼로그·오버레이·스낵바·FAB 등)로 가려져도 <b style="color:var(--text)">여전히 "보인다"고 판정</b>한다 — 무엇이 위에 덮였는지는 보지 않기 때문. 그래서 오버레이에 가려진 아이템도 노출로 잡힐 수 있다.</p>
+    </div>
+
+    <div class="cmp-wrap">
+      <table class="cmp">
+        <thead>
+          <tr><th>구분</th><th>impressionCapturable (기찬님)</th><th>impressionable (남표님)</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="k">역할</td><td>노출 여부 → 캐시 등록/삭제</td><td>노출 + 스크롤 + 발송</td></tr>
+          <tr><td class="k">발송 주체</td><td>별도 <code>ImpressionEventEffects</code> (스크롤 트리거)</td><td>자기 자신 (<code>onImpression</code>)</td></tr>
+          <tr><td class="k">스크롤 판단</td><td>없음 — 외부가 담당</td><td>내장 (정지 / 저속 조건)</td></tr>
+          <tr><td class="k">가시성 기준</td><td>호스트 View 의 실제 보이는 영역</td><td>호출자가 넘긴 viewportRect</td></tr>
+          <tr><td class="k">정지 false 처리</td><td>외부 스크롤 트리거에 의존</td><td>내부에서 시간 지연으로 흡수</td></tr>
+          <tr><td class="k">처리 단위</td><td>리스트 공유 캐시</td><td>요소별</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="doc-note">→ 상품상세·상품리스트는 <b style="color:var(--text)">impressionCapturable + ImpressionEventEffects</b> 조합을 쓴다. 그래서 발송 타이밍(아래)이 <code>ImpressionEventEffects</code> 의 스크롤 트리거에 달려 있고, 이 문서의 false 구간 문제도 거기서 드러났다.</p>
+  </section>
+
+  <section>
+    <p class="sec-label">원인 — scroll 세션 구조</p>
+    <h2>드래그와 플링은 별개의 scroll 세션이다</h2>
+    <p style="color:var(--muted);max-width:60ch;margin:0 0 8px">
+      핵심 전제: <code>isScrollInProgress</code> 는 <b style="color:var(--text)">“지금 <code>scroll {}</code> 블록 안에 있나”</b> 일 뿐이다. 블록에 들어가면 <code>true</code>, 빠져나오면 <code>false</code>.
+    </p>
+
+    <pre><span class="cm">// DefaultScrollableState — isScrollInProgress 의 정체</span>
+<span class="kw">override suspend fun</span> scroll(priority, block) = coroutineScope {
+    scrollMutex.mutateWith(scrollScope, priority) {
+        isScrollingState.value = <span class="hl">true</span>        <span class="cm">// 블록 진입</span>
+        <span class="kw">try</span> { block() } <span class="kw">finally</span> {
+            isScrollingState.value = <span class="hlr">false</span>   <span class="cm">// 블록 종료</span>
+        }
+    }
+}
+<span class="kw">override val</span> isScrollInProgress <span class="kw">get</span>() = isScrollingState.value</pre>
+
+    <div style="margin-top:24px">
+      <div class="step">
+        <div class="step-no">01</div>
+        <div>
+          <h3>드래그 <span class="state t">true</span></h3>
+          <p>손가락이 끄는 동안 <b>scroll 세션 #1</b> 이 열려 있다. 우선순위는 <code>UserInput</code>.</p>
+          <pre><span class="cm">// ScrollableNode.drag — 세션 #1</span>
+scroll(priority = MutatePriority.<span class="hl">UserInput</span>) {
+    forEachDelta { scrollByWithOverscroll(...) }
+}</pre>
+        </div>
+      </div>
+
+      <div class="step gap">
+        <div class="step-no">02</div>
+        <div>
+          <h3>손 뗌 → 블록 종료 <span class="state f">false</span></h3>
+          <p>드래그가 끝나면 <code>scroll {}</code> 블록이 종료되며 <code>finally</code> 가 <b>isScrolling = false</b> 로 전환한다. false 가 시작되는 지점이다.</p>
+        </div>
+      </div>
+
+      <div class="step gap">
+        <div class="step-no">03</div>
+        <div>
+          <h3>플링은 <code>launch {}</code> 로 예약 <span class="state f">false 유지</span></h3>
+          <p>남은 속도로 플링을 <b>새 코루틴으로 시작(launch)</b> 한다. 드래그 종료와 플링 시작이 <b style="color:var(--red)">한 번에 이어지지 않아</b>, 그 사이가 곧 false 구간이다.</p>
+          <pre class="gap"><span class="cm">// ScrollableNode.onDragStopped — false 구간의 원인</span>
+<span class="kw">override fun</span> onDragStopped(event) {
+    nestedScrollDispatcher.coroutineScope.<span class="hlr">launch</span> {  <span class="cm">// 새 코루틴(비동기)</span>
+        scrollLogic.onScrollStopped(event.velocity, ...)
+    }
+}</pre>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-no">04</div>
+        <div>
+          <h3>플링 <span class="state t">true</span></h3>
+          <p><b>scroll 세션 #2</b> 가 열리며 다시 <code>true</code>. 우선순위는 <code>Default</code> — 드래그와 <b>완전히 다른 세션</b>이다. 감속이 끝나면 블록이 닫혀 마지막 <code>false</code>(진짜 정지).</p>
+          <pre><span class="cm">// ScrollingLogic.doFlingAnimation — 세션 #2</span>
+scroll(priority = MutatePriority.<span class="hl">Default</span>) {
+    <span class="kw">with</span>(flingBehavior) { performFling(...) }
+}</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="sec-label">관찰 A — 디스패처</p>
+    <h2>collect 디스패처에 따라 false 를 관찰하는지가 달라진다</h2>
+    <p style="color:var(--muted);max-width:62ch;margin:0 0 20px">
+      이 <code>false</code> 는 약 2ms 로 <b style="color:var(--text)">한 프레임보다 짧다.</b> 그래서 같은 <code>snapshotFlow { isScrollInProgress }</code> 라도, <b style="color:var(--text)">어느 디스패처에서 collect 하느냐</b>에 따라 이 짧은 <code>false</code> 를 잡기도 하고 놓치기도 한다.
+    </p>
+    <div class="compare">
+      <div class="card bad">
+        <h4>Dispatchers.Main.immediate</h4>
+        <p class="who">= lifecycleScope · asFlow 가 도는 곳</p>
+        <p>snapshot 적용 시점에 <b style="color:var(--text)">동기로 즉시 재read</b> → 2ms 의 <code>false</code> 를 관찰함.</p>
+        <p class="verdict">읽힘: true · false · true · false ← false 잡힘</p>
+      </div>
+      <div class="card good">
+        <h4>AndroidUiDispatcher</h4>
+        <p class="who">= LaunchedEffect (프레임 정렬)</p>
+        <p>재read 를 <b style="color:var(--text)">프레임 경계로 미룸</b> → false·true 가 한 프레임에 합쳐져 최종값만 읽음.</p>
+        <p class="verdict">읽힘: true ┄┄ false ← false 안 보임 (단, false 가 1프레임보다 짧을 때만)</p>
+      </div>
+    </div>
+    <p class="doc-note">→ 단, 이건 false 가 <b style="color:var(--text)">한 프레임 안에 들어올 때만</b> 통한다. 프레임이 길어지면(아래) false 가 한 프레임을 넘겨 프레임 정렬이어도 그대로 보인다 — 즉 <b style="color:var(--red)">디스패처는 근본 해법이 아니다.</b></p>
+  </section>
+
+  <section>
+    <p class="sec-label">관찰 B — 프레임이 길어질 때</p>
+    <h2>false 길이는 메인 스레드 점유에 비례하며, 디스패처와 무관하다</h2>
+    <p style="color:var(--muted);max-width:64ch;margin:0 0 16px">
+      플링 코루틴은 <code>launch</code> 로 <b style="color:var(--text)">메인 스레드 큐에 예약</b>될 뿐 곧장 실행되지 않는다.
+      앞선 프레임 작업(recompose · measure · 진입 레이아웃)이 길어지면 그만큼 <b style="color:var(--text)">늦게 실행</b>되고,
+      그동안 <code>isScrollInProgress</code> 는 false 로 남는다 — <b style="color:var(--text)">false 길이 = 플링 코루틴이 큐에서 기다린 시간.</b>
+    </p>
+    <p style="color:var(--muted);max-width:64ch;margin:0 0 20px">
+      그래서 false 길이는 <b style="color:var(--text)">메인 스레드 점유율</b> 에 비례한다. 프레임 정렬이 합칠 수 있는 건
+      <b style="color:var(--text)">한 프레임 안에 끝나는 false</b> 뿐이라, 프레임이 길어져 false 가 한 프레임을 넘기면 <b style="color:var(--red)">immediate 든 프레임 정렬이든 그대로 노출</b>된다.
+    </p>
+    <div class="compare">
+      <div class="card good">
+        <h4>가벼운 화면</h4>
+        <p class="who">상품상세 가로 섹션 · 프레임 ~16ms</p>
+        <p>false <b style="color:var(--text)">~1ms</b> (한 프레임보다 짧음) → 합쳐짐 / 무해</p>
+        <p class="verdict">정상</p>
+      </div>
+      <div class="card bad">
+        <h4>무거운 화면</h4>
+        <p class="who">상품리스트 · 상품상세 진입 · 프레임 22·49·99·134ms</p>
+        <p>false <b style="color:var(--text)">27~79ms</b> → 프레임 넘김 → 디스패처 무관 노출</p>
+        <p class="verdict">발생</p>
+      </div>
+    </div>
+    <p class="doc-note" style="margin-bottom:8px">프레임 정렬 디스패처는 매 프레임 경계에서 <code>isScrollInProgress</code> 를 한 번 읽는다(아래 <b style="color:var(--text)">isScrollInProgress</b> 행). 메인 스레드 작업이 그 프레임 안에 끝나는지에 따라 결과가 갈린다.</p>
+
+    <div class="fdiag">
+      <div class="fcase good">
+        <h4>해피 케이스 — 부드러운 화면</h4>
+        <p class="sub">프레임 ~16ms · 메인 스레드 여유</p>
+
+        <p class="lane-label">메인 스레드</p>
+        <div class="lane">
+          <div class="cell work" style="grid-column:1/4">드래그</div>
+          <div class="cell work fling" style="grid-column:4/9">플링 (즉시 시작 → 감속)</div>
+        </div>
+
+        <p class="lane-label">isScrollInProgress (프레임별 읽힘)</p>
+        <div class="lane">
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st f">F</div>
+        </div>
+        <div class="faxis">
+          <span>f1</span><span>f2</span><span>f3</span><span>f4</span><span>f5</span><span>f6</span><span>f7</span><span>f8</span>
+        </div>
+
+        <p class="note">드래그 종료(f3~f4 경계)와 동시에 플링 코루틴이 같은 프레임 안에서 실행 → 순간 false 가 프레임 경계 읽힘에 안 걸림. <b>false 안 보임</b>, f8 의 F 는 진짜 정지.</p>
+      </div>
+
+      <div class="fcase bad">
+        <h4>지연 케이스 — 무거운 화면 (메인 디스패처여도)</h4>
+        <p class="sub">긴 프레임 49~99ms · 플링 코루틴이 큐에서 밀림</p>
+
+        <p class="lane-label">메인 스레드</p>
+        <div class="lane">
+          <div class="cell work" style="grid-column:1/4">드래그</div>
+          <div class="cell work heavy" style="grid-column:4/7">무거운 작업 (recompose / measure) — 플링 코루틴 대기</div>
+          <div class="cell work fling" style="grid-column:7/9">플링</div>
+        </div>
+
+        <p class="lane-label">isScrollInProgress (프레임별 읽힘)</p>
+        <div class="lane">
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+          <div class="cell st f">F</div>
+          <div class="cell st f">F</div>
+          <div class="cell st f">F</div>
+          <div class="cell st t">T</div>
+          <div class="cell st t">T</div>
+        </div>
+        <div class="faxis">
+          <span>f1</span><span>f2</span><span>f3</span><span>f4</span><span>f5</span><span>f6</span><span>f7</span><span>f8</span>
+        </div>
+
+        <p class="note">드래그 종료(f3 끝) 후 플링 코루틴이 <b>무거운 작업 뒤 큐에 밀려</b> f4~f6 동안 실행되지 못함 → <code>isScrollInProgress</code> 가 <b>여러 프레임 동안 false</b>. 프레임 정렬이어도 이 false 가 매 프레임 읽혀 <b>그대로 관찰됨</b>.</p>
+      </div>
+    </div>
+
+    <p class="doc-note">Perfetto 실측 — 상품리스트: <code>animation</code>(Compose recompose) 37ms / 상품상세 진입: <code>measure</code> 78ms. 게다가 <b style="color:var(--text)">debug 빌드</b>라 <code>JIT compiling</code> 이 도배돼 수치가 부풀려짐 → 진짜치는 release 에서 측정해야 한다.</p>
+  </section>
+
+  <section>
+    <p class="sec-label">조사 기록</p>
+    <h2>관찰 순서</h2>
+    <div style="margin-top:20px">
+      <div class="step">
+        <div class="step-no">01</div>
+        <div>
+          <h3>구조 파악</h3>
+          <p><code>impressionCapturable</code> 는 캐시 등록만, 발송은 <code>ImpressionEventEffects</code>(스크롤 트리거)가 담당. → 그 트리거가 잠깐 false 인 순간에 노출됨.</p>
+        </div>
+      </div>
+      <div class="step gap">
+        <div class="step-no">02</div>
+        <div>
+          <h3>가설: 디스패처 차이?</h3>
+          <p><code>asFlow</code> 로그는 <code>true·false·true·false</code> (false 보임), 새로 단 <code>LaunchedEffect</code> 로거는 깨끗. → "collect 디스패처가 원인?"</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">03</div>
+        <div>
+          <h3>같은 listState 확인</h3>
+          <p><code>stateId</code> 동일 → 화면·스크롤러 차이가 아님. 관찰 구조 차이로 좁힘.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">04</div>
+        <div>
+          <h3>immediate vs 프레임 정렬</h3>
+          <p><code>Main.immediate</code>(lifecycleScope=asFlow) 는 동기 즉시 재read → false 포착. <code>AndroidUiDispatcher</code>(LaunchedEffect) 는 프레임 경계로 미뤄 합침. — 디스패처 가설 성립하는 듯.</p>
+        </div>
+      </div>
+      <div class="step gap">
+        <div class="step-no">05</div>
+        <div>
+          <h3>반증: 프레임 정렬도 발생</h3>
+          <p><code>impressionable</code> 은 프레임 정렬(<code>Modifier.Node.coroutineScope</code>)인데도 false 발생. → <b style="color:var(--red)">디스패처만으론 설명 안 됨.</b></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">06</div>
+        <div>
+          <h3>false 길이가 화면마다 일정</h3>
+          <p>가로 섹션 ~1ms vs 상품리스트 27~79ms. 매번 달라지는 게 아니라 화면별로 <b>일정</b> → 부하 의존 의심.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">07</div>
+        <div>
+          <h3>프레임 로거</h3>
+          <p>상품리스트에 <code>22·49·99ms</code> 긴 프레임이 false 구간과 시간상 겹침. → "긴 프레임이 플링 시작을 지연".</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">08</div>
+        <div>
+          <h3>Perfetto 실측</h3>
+          <p>상품리스트 <code>animation</code> 37ms(recompose) · 상품상세 진입 <code>measure</code> 78ms. + <code>JIT compiling</code> 도배(<b>debug 빌드</b>).</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-no">09</div>
+        <div>
+          <h3>결론</h3>
+          <p><b style="color:var(--amber)">false 길이 = 플링 코루틴의 큐 대기시간 = 메인 점유에 비례.</b> 디스패처는 한 프레임보다 짧은 false 만 가릴 뿐 근본 해법이 아니다.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="callout">
+      <h2>결론</h2>
+      <ul>
+        <li><b>이 false 는 버그가 아니다.</b> <code>isScrollInProgress</code> 는 “scroll 블록 안인가”만 뜻하고, 드래그→플링 연속성을 보장한 적이 없다.</li>
+        <li><b>원인은 두 개의 세션.</b> 드래그(<code>UserInput</code>)와 플링(<code>Default</code>)은 별개 <code>scroll {}</code> 이고, 사이를 <code>launch {}</code> 로 비동기 인계한다.</li>
+        <li><b>RecyclerView 엔 없다.</b> 거긴 <code>DRAGGING → SETTLING → IDLE</code> 한 상태머신이라 중간 IDLE 이 끼지 않는다. Compose 는 boolean 하나뿐.</li>
+        <li><b>길이는 메인 점유에 비례.</b> false 길이 = 플링 코루틴의 메인 큐 대기시간. 부드러우면 ~1ms(무해), 무거우면 27~79ms.</li>
+        <li><b>디스패처로 못 막는다.</b> 프레임 정렬은 한 프레임보다 짧은 false 만 가린다. 프레임이 길어져 한 프레임을 넘기면 immediate·frame 무관하게 샌다.</li>
+        <li><b>확실히 막으려면 debounce / velocity.</b> 단 debounce 는 그 시간보다 짧은 정지를 삼키고, 프레임이 매우 길면 뚫린다. 임프레션이면 <code>onVisibilityChanged(minDurationMs)</code> 가 더 견고.</li>
+      </ul>
+      <p class="doc-note">⚠︎ 위 동작은 공식 문서의 계약이 아니라 <b style="color:var(--text)">구현 디테일</b>(소스: Scrollable.kt · ScrollableState.kt). Compose 버전에 따라 타이밍이 달라질 수 있다.</p>
+    </div>
+  </section>
+
+  <footer>
+    출처 — androidx.compose.foundation.gestures: Scrollable.kt · ScrollableState.kt · FlingBehavior.kt
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var canvas = document.getElementById("trace");
+    var ctx = canvas.getContext("2d");
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // 신호 모델: [구간 시작비율, 라벨, high?]  — gap 은 보이라고 폭 과장
+    var segs = [
+      { x0: 0.00, x1: 0.40, label: "DRAG",  high: true,  color: "#F4B63E" },
+      { x0: 0.40, x1: 0.455, label: "false", high: false, color: "#FF6B6B" },
+      { x0: 0.455, x1: 0.85, label: "FLING", high: true, color: "#F4B63E" },
+      { x0: 0.85, x1: 1.00, label: "STOP",  high: false, color: "#8C92A8" }
+    ];
+
+    var W = 0, H = 0, dpr = 1;
+    var padL = 14, padR = 14, padT = 30, padB = 34;
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var cssW = canvas.parentElement.clientWidth - 40;
+      var cssH = 200;
+      canvas.width = cssW * dpr;
+      canvas.height = cssH * dpr;
+      canvas.style.height = cssH + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      W = cssW; H = cssH;
+    }
+
+    function xAt(r) { return padL + (W - padL - padR) * r; }
+    function yHi() { return padT + 14; }
+    function yLo() { return H - padB - 14; }
+
+    function draw(progress) {
+      ctx.clearRect(0, 0, W, H);
+
+      // baseline grid
+      ctx.strokeStyle = "rgba(255,255,255,0.06)";
+      ctx.lineWidth = 1;
+      [yHi(), yLo()].forEach(function (y) {
+        ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
+      });
+      ctx.fillStyle = "#69708A";
+      ctx.font = "11px ui-monospace, Menlo, monospace";
+      ctx.fillText("true", padL, yHi() - 8);
+      ctx.fillText("false", padL, yLo() + 16);
+
+      // signal as square wave
+      ctx.lineWidth = 2.5;
+      ctx.lineJoin = "round";
+      var prevY = null;
+      segs.forEach(function (s) {
+        var y = s.high ? yHi() : yLo();
+        var x0 = xAt(s.x0), x1 = xAt(s.x1);
+        // vertical transition from previous level
+        if (prevY !== null && prevY !== y) {
+          ctx.strokeStyle = "rgba(231,233,242,0.5)";
+          ctx.beginPath(); ctx.moveTo(x0, prevY); ctx.lineTo(x0, y); ctx.stroke();
+        }
+        ctx.strokeStyle = s.color;
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke();
+        prevY = y;
+
+        // labels
+        ctx.fillStyle = s.color === "#8C92A8" ? "#8C92A8" : s.color;
+        ctx.font = "600 11px ui-monospace, Menlo, monospace";
+        var cx = (x0 + x1) / 2;
+        var ty = s.high ? yHi() - 8 : yLo() + 26;
+        ctx.textAlign = "center";
+        ctx.fillText(s.label, cx, ty);
+        ctx.textAlign = "left";
+      });
+
+      // gap callout arrow
+      var gx = xAt((0.40 + 0.455) / 2);
+      ctx.strokeStyle = "#FF6B6B";
+      ctx.fillStyle = "#FF6B6B";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(gx, yLo() + 30); ctx.lineTo(gx, yLo() + 6); ctx.stroke();
+
+      // playhead
+      if (progress != null) {
+        var px = xAt(progress);
+        ctx.strokeStyle = "#56C2D6";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(px, padT - 6); ctx.lineTo(px, H - padB + 6); ctx.stroke();
+        ctx.fillStyle = "#56C2D6";
+        ctx.beginPath(); ctx.arc(px, padT - 6, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+
+    var raf = null, start = null, DUR = 3600;
+    function frame(ts) {
+      if (start == null) start = ts;
+      var p = (ts - start) / DUR;
+      if (p >= 1) { draw(1); raf = null; return; }
+      draw(p);
+      raf = requestAnimationFrame(frame);
+    }
+    function play() {
+      if (reduce) { draw(null); return; }
+      if (raf) cancelAnimationFrame(raf);
+      start = null;
+      raf = requestAnimationFrame(frame);
+    }
+
+    window.addEventListener("resize", function () { resize(); draw(reduce ? null : 1); });
+    document.getElementById("replay").addEventListener("click", play);
+
+    resize();
+    if (reduce) { draw(null); } else { play(); }
+  })();
+</script>
